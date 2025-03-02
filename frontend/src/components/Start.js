@@ -1,10 +1,40 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Container, TextField, Button, Typography } from "@mui/material";
 
 const Start = () => {
   const [instaName, setInstaName] = useState("");
+  const [quizData, setQuizData] = useState(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    fetch("http://localhost:3000/quiz")
+      .then((res) => res.json())
+      .then((data) => {
+        setQuizData(data.sections);
+      })
+      .catch((err) => console.error("Error fetching quiz data:", err));
+  }, []);
+
+  const startQuiz = async () => {
+    try {
+      const response = await fetch("http://localhost:3000/start_quiz", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ instaName }),
+      });
+
+      if (response.ok) {
+        navigate("/quiz");
+      } else {
+        console.error("Failed to add Instagram name");
+      }
+    } catch (error) {
+      console.error("Error:", error);
+    }
+  };
 
   return (
     <Container
@@ -42,7 +72,7 @@ const Start = () => {
       <Button
         variant="contained"
         color="secondary"
-        onClick={() => navigate("/quiz")}
+        onClick={startQuiz}
       >
         Start Quiz
       </Button>

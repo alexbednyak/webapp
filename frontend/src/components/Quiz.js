@@ -4,28 +4,29 @@ import { useNavigate } from "react-router-dom";
 
 function Quiz() {
   const navigate = useNavigate();
-  const [quizData, setQuizData] = useState(null);
+  const [quizData, setQuizData] = useState([]);
   const [answers, setAnswers] = useState({});
 
   useEffect(() => {
     fetch("http://localhost:3000/quiz")
       .then((res) => res.json())
       .then((data) => {
-        setQuizData(data.sections);
+        setQuizData(data.sections || []); // Ensure we store sections as an array
         const initialAnswers = {};
-        Object.keys(data.sections).forEach((section) => {
-          initialAnswers[section] = new Array(data.sections[section].length).fill("a"); // Default all to "a"
+
+        data.sections.forEach((section) => {
+          initialAnswers[section.section_name] = section.questions.map(() => null); // Initialize with null values
         });
+
         setAnswers(initialAnswers);
       });
   }, []);
 
   const handleChange = (section, index, value) => {
-    setAnswers((prev) => {
-      const newAnswers = { ...prev };
-      newAnswers[section][index] = value;
-      return newAnswers;
-    });
+    setAnswers((prev) => ({
+      ...prev,
+      [section]: prev[section].map((ans, i) => (i === index ? value : ans)), // Update answer at the correct index
+    }));
   };
 
   const handleSubmit = () => {
@@ -33,33 +34,44 @@ function Quiz() {
   };
 
   return (
-    <Container maxWidth="sm" style={{ marginTop: "20px" }}>
-      <Paper style={{ padding: "20px", backgroundColor: "#FFF3E0" }}>
-        <Typography variant="h4" align="center" gutterBottom>
+    <Container maxWidth="md" style={{ marginTop: "40px" }}>
+      <Paper style={{ padding: "30px", backgroundColor: "#f0f4f8" }}>
+        <Typography variant="h3" align="center" gutterBottom>
           Quiz App
         </Typography>
-        {quizData &&
-          Object.keys(quizData).map((section) => (
-            <div key={section} style={{ marginBottom: "20px" }}>
-              <Typography variant="h5" align="left" gutterBottom>
-                {section}
-              </Typography>
-              {quizData[section].map((question, index) => (
-                <FormControl component="fieldset" key={index} style={{ marginBottom: "10px" }}>
-                  <Typography variant="h6">{question}</Typography>
-                  <RadioGroup
-                    value={answers[section][index]}
-                    onChange={(e) => handleChange(section, index, e.target.value)}
-                  >
-                    <FormControlLabel value="a" control={<Radio color="primary" />} label="A" />
-                    <FormControlLabel value="b" control={<Radio color="secondary" />} label="B" />
-                    <FormControlLabel value="c" control={<Radio color="primary" />} label="C" />
-                  </RadioGroup>
-                </FormControl>
-              ))}
-            </div>
-          ))}
-        <Button variant="contained" color="primary" onClick={handleSubmit} fullWidth>
+
+        {quizData.map((section) => (
+          <div key={section.section_name} style={{ marginBottom: "30px" }}>
+            <Typography variant="h4" align="left" gutterBottom>
+              {section.section_name}
+            </Typography>
+
+            {section.questions.map((question, index) => (
+              <FormControl component="fieldset" key={index} style={{ marginBottom: "20px" }}>
+                <Typography variant="h6" style={{ fontWeight: "bold", marginBottom: "10px" }}>
+                  {question.question}
+                </Typography>
+
+                <RadioGroup
+                  value={answers[section.section_name]?.[index] || ""}
+                  onChange={(e) => handleChange(section.section_name, index, e.target.value)}
+                  style={{ display: "flex", flexDirection: "column" }} // Ensure options are in column format
+                >
+                  {question.answers.map((answer) => (
+                    <FormControlLabel
+                      key={answer.answer}
+                      value={answer.answer}
+                      control={<Radio color="primary" />}
+                      label={answer.answer}
+                    />
+                  ))}
+                </RadioGroup>
+              </FormControl>
+            ))}
+          </div>
+        ))}
+
+        <Button variant="contained" color="primary" onClick={handleSubmit} fullWidth style={{ padding: "15px 0" }}>
           Submit
         </Button>
       </Paper>

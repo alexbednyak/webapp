@@ -1,0 +1,49 @@
+{
+    "sections": [
+      {
+        "section_name": "Section 1",
+        "questions": [
+          {
+            "question": "question1",
+            "answers": [
+              {
+                "answer": "answer1-q1",
+                "score": 10
+              },
+              {
+                "answer": "answer2-q1",
+                "score": 7
+              },
+              {
+                "answer": "answer3-q1",
+                "score": 3
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "section_name": "Section 2",
+        "questions": [
+          {
+            "question": "question4",
+            "answers": [
+              {
+                "answer": "answer1-q4",
+                "score": 10
+              },
+              {
+                "answer": "answer2-q4",
+                "score": 7
+              },
+              {
+                "answer": "answer3-q4",
+                "score": 3
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+  
