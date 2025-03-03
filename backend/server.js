@@ -2,6 +2,7 @@
 const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
+const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 const app = express();
 
 const PORT = process.env.PORT || 3000;
@@ -14,6 +15,9 @@ const feedbackFilePath = "feedback.json";
 const filePath = "instaNames.txt";
 const resultsDirectory = "user_results"; // Directory to store user results
 const activeSubmissions = new Set(); // Track active submissions
+const botToken = "8058560672:AAGKDQ2Ia0Wu9h5VXz5kLtMjkbxW6EFj0lY";
+const chatId = "523120392"; // Your chat ID
+
 // Ensure the results directory exists
 if (!fs.existsSync(resultsDirectory)) {
     fs.mkdirSync(resultsDirectory);
@@ -44,6 +48,34 @@ const loadFeedback = () => {
     }
 };
 
+// Send a message to the Telegram bot
+const sendMessage = async (message) => {
+    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+    const payload = {
+        chat_id: chatId,
+        text: message,
+    };
+
+    try {
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+            throw new Error("Failed to send message");
+        }
+
+        const data = await response.json();
+        console.log("Message sent successfully:", data);
+    } catch (error) {
+        console.error("Error sending message:", error);
+    }
+};
+
 // Endpoint to get quiz data
 app.get("/quiz", (req, res) => {
     const quizData = loadQuestions();
@@ -51,7 +83,7 @@ app.get("/quiz", (req, res) => {
 });
 
 // Endpoint to submit quiz results
-app.post("/submit", (req, res) => {
+app.post("/submit", async (req, res) => {
     const { instaName, answers } = req.body;
 
     if (!instaName) {
@@ -117,6 +149,10 @@ app.post("/submit", (req, res) => {
         fs.writeFileSync(filePath, JSON.stringify(results, null, 2));
 
         res.json(results);
+
+        // Send a message to the Telegram bot
+        const message = `New quiz submission received:\nInstagram Name: ${instaName}\nScore: ${totalScore}/${maxScore}\nFeedback: ${feedbackText}`;
+        await sendMessage(message);
     } catch (error) {
         console.error("Error processing submission:", error);
         res.status(500).json({ error: "Internal server error" });
