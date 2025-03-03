@@ -1,67 +1,101 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Container, Typography, Button, Radio, RadioGroup, FormControlLabel, FormControl, Paper } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 
-function Quiz() {
+const Quiz = () => {
   const navigate = useNavigate();
   const [quizData, setQuizData] = useState([]);
   const [answers, setAnswers] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const instaName = localStorage.getItem("instaName") || "";
 
   useEffect(() => {
-    fetch("http://localhost:3000/quiz")
-      .then((res) => res.json())
-      .then((data) => {
-        setQuizData(data.sections || []); // Ensure we store sections as an array
-        const initialAnswers = {};
-
-        data.sections.forEach((section) => {
-          initialAnswers[section.section_name] = section.questions.map(() => null); // Initialize with null values
-        });
-
+    const fetchQuizData = async () => {
+      console.log("Fetching quiz data");
+      try {
+        const res = await fetch("http://localhost:3000/quiz");
+        const data = await res.json();
+        console.log("Quiz data fetched", data);
+        setQuizData(data.sections || []);
+        const initialAnswers = data.sections.reduce((acc, section) => {
+          acc[section.section_name] = section.questions.map(() => null);
+          return acc;
+        }, {});
         setAnswers(initialAnswers);
-      });
+      } catch (error) {
+        console.error("Error fetching quiz data:", error);
+      }
+    };
+
+    fetchQuizData();
   }, []);
 
   const handleChange = (section, index, value) => {
     setAnswers((prev) => ({
       ...prev,
-      [section]: prev[section].map((ans, i) => (i === index ? value : ans)), // Update answer at the correct index
+      [section]: prev[section].map((ans, i) => (i === index ? value : ans)),
     }));
   };
 
-  const handleSubmit = () => {
-    navigate("/results", { state: { answers } }); // Navigate to results page with answers
-  };
+  const handleSubmit = useCallback(async (e) => {
+    e.preventDefault();
+    console.log("handleSubmit called");
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+
+    if (!instaName) {
+      alert("Instagram name not found. Please restart the quiz.");
+      navigate("/");
+      setIsSubmitting(false);
+      return;
+    }
+
+    const payload = { instaName, answers };
+    console.log("Payload:", JSON.stringify(payload));
+
+    try {
+      const response = await fetch("http://localhost:3000/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (response.ok) {
+        const results = await response.json();
+        navigate("/results", { state: { answers, results } });
+      } else {
+        console.error("Failed to submit quiz");
+      }
+    } catch (error) {
+      console.error("Error submitting quiz:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [isSubmitting, instaName, navigate, answers]);
 
   return (
     <Container maxWidth="md" style={{ marginTop: "40px" }}>
       <Paper style={{ padding: "30px", backgroundColor: "#f0f4f8" }}>
-        <Typography variant="h3" align="center" gutterBottom>
-          Quiz App
+        <Typography variant="h3" align="center">Quiz App</Typography>
+        <Typography variant="h5" align="center" style={{ marginBottom: "20px" }}>
+          Instagram Name: {instaName}
         </Typography>
 
         {quizData.map((section) => (
           <div key={section.section_name} style={{ marginBottom: "30px" }}>
-            <Typography variant="h4" align="left" gutterBottom>
-              {section.section_name}
-            </Typography>
-
+            <Typography variant="h4">{section.section_name}</Typography>
             {section.questions.map((question, index) => (
-              <FormControl component="fieldset" key={index} style={{ marginBottom: "20px" }}>
-                <Typography variant="h6" style={{ fontWeight: "bold", marginBottom: "10px" }}>
-                  {question.question}
-                </Typography>
-
+              <FormControl key={index} style={{ marginBottom: "20px" }}>
+                <Typography variant="h6">{question.question}</Typography>
                 <RadioGroup
                   value={answers[section.section_name]?.[index] || ""}
                   onChange={(e) => handleChange(section.section_name, index, e.target.value)}
-                  style={{ display: "flex", flexDirection: "column" }} // Ensure options are in column format
                 >
                   {question.answers.map((answer) => (
                     <FormControlLabel
                       key={answer.answer}
                       value={answer.answer}
-                      control={<Radio color="primary" />}
+                      control={<Radio />}
                       label={answer.answer}
                     />
                   ))}
@@ -71,12 +105,18 @@ function Quiz() {
           </div>
         ))}
 
-        <Button variant="contained" color="primary" onClick={handleSubmit} fullWidth style={{ padding: "15px 0" }}>
-          Submit
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={handleSubmit}
+          fullWidth
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? "Submitting..." : "Submit"}
         </Button>
       </Paper>
     </Container>
   );
-}
+};
 
 export default Quiz;

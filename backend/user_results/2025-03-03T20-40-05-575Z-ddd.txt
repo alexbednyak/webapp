@@ -1,0 +1,24 @@
+{
+  "instaName": "ddd",
+  "totalScore": 6,
+  "maxScore": 80,
+  "feedback": "Consider working on self-improvement and career clarity for better progress.",
+  "answers": {
+    "Професійні навички та розвиток": [
+      null,
+      null,
+      null,
+      null
+    ],
+    "Кар’єрне зростання та можливості": [
+      "Є приблизне бачення, але все ще є багато сумнівів.",
+      null
+    ],
+    "Самопрезентація та співбесіди": [
+      null
+    ],
+    "Задоволеність роботою та баланс": [
+      null
+    ]
+  }
+}

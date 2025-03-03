@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Container, Typography, Paper, Button } from "@mui/material";
 import { useLocation, useNavigate } from "react-router-dom";
 
-function Results() {
+const Results = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [results, setResults] = useState(null);
@@ -13,13 +13,7 @@ function Results() {
       return;
     }
 
-    fetch("http://localhost:3000/submit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(location.state.answers),
-    })
-      .then((res) => res.json())
-      .then((data) => setResults(data));
+    setResults(location.state.results);
   }, [location, navigate]);
 
   return (
@@ -48,6 +42,6 @@ function Results() {
       </Paper>
     </Container>
   );
-}
+};
 
 export default Results;
