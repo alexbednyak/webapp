@@ -29,11 +29,14 @@ function Results() {
           Results
         </Typography>
         {results ? (
-          Object.keys(results).map((section) => (
-            <Typography key={section} variant="body1">
-              {section}: {results[section].feedback} (Score: {results[section].score})
+          <>
+            <Typography variant="h6" align="center">
+              {results.feedback}
             </Typography>
-          ))
+            <Typography variant="body1" align="center">
+              Your Score: {results.totalScore} / {results.maxScore}
+            </Typography>
+          </>
         ) : (
           <Typography variant="h6" align="center">
             Loading results...

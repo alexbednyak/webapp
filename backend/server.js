@@ -28,10 +28,10 @@ const loadQuestions = () => {
 const loadFeedback = () => {
     try {
         const data = fs.readFileSync(feedbackFilePath, "utf8");
-        return JSON.parse(data);
+        return JSON.parse(data).thresholds;
     } catch (err) {
         console.error("Error reading feedback.json:", err);
-        return { feedback: [] }; // Return empty feedback if the file fails to load
+        return []; // Return empty feedback if the file fails to load
     }
 };
 
@@ -43,64 +43,48 @@ app.get("/quiz", (req, res) => {
 
 // Endpoint to submit quiz results
 app.post("/submit", (req, res) => {
-  const answers = req.body;
-  const quizData = loadQuestions();
-  const feedbackData = loadFeedback();
+    const answers = req.body;
+    const quizData = loadQuestions();
+    const feedbackData = loadFeedback();
 
-  console.log("Received Answers:", JSON.stringify(answers, null, 2));
-  console.log("Quiz Data:", JSON.stringify(quizData, null, 2));
-  console.log("Feedback Data:", JSON.stringify(feedbackData, null, 2));
+    console.log("Received Answers:", JSON.stringify(answers, null, 2));
 
-  let results = {};
+    let totalScore = 0;
+    let totalQuestions = 0;
 
-  quizData.sections.forEach((section) => {
-      let totalScore = 0;
+    quizData.sections.forEach((section) => {
+        section.questions.forEach((question, qIndex) => {
+            const userAnswers = answers[section.section_name] || [];
+            const userAnswer = userAnswers[qIndex];
 
-      section.questions.forEach((question, qIndex) => {
-          const userAnswers = answers[section.section_name] || [];
-          const userAnswer = userAnswers[qIndex];
+            if (userAnswer) {
+                const selectedAnswer = question.answers.find(a => a.answer === userAnswer);
+                if (selectedAnswer) {
+                    totalScore += selectedAnswer.score;
+                }
+            }
+            totalQuestions++;
+        });
+    });
 
-          console.log(`Processing question ${qIndex} in section ${section.section_name}:`, userAnswer);
+    const maxScore = totalQuestions * 10;
+    const scorePercentage = totalScore / maxScore;
 
-          if (userAnswer) {
-              const selectedAnswer = question.answers.find(a => a.answer === userAnswer);
+    let feedbackText = "No feedback available";
+    for (const fb of feedbackData) {
+        if (scorePercentage >= fb.range[0] && scorePercentage <= fb.range[1]) {
+            feedbackText = fb.text;
+            break;
+        }
+    }
 
-              console.log("Selected Answer:", selectedAnswer);
+    const results = { totalScore, maxScore, feedback: feedbackText };
 
-              if (selectedAnswer) {
-                  totalScore += selectedAnswer.score;
-              } else {
-                  console.warn(`Answer '${userAnswer}' not found for question '${question.question}'. Available answers:`, question.answers.map(a => a.answer));
-              }
-          } else {
-              console.warn(`No answer provided for question '${question.question}' in section '${section.section_name}'`);
-          }
-      });
+    // Save results history
+    resultsHistory.push(results);
 
-      // Determine feedback based on total score
-      let feedbackText = "No feedback available";
-      if (Array.isArray(feedbackData)) {
-          feedbackText = feedbackData.find(fb => totalScore >= fb.range[0] && totalScore <= fb.range[1])?.text || feedbackText;
-      }
-
-      console.log("Feedback Text:", feedbackText);
-
-      results[section.section_name] = { score: totalScore, feedback: feedbackText };
-  });
-
-  // Save results history
-  resultsHistory.push(results);
-
-  res.json(results);
+    res.json(results);
 });
-
-
-
-
-
-
-
-
 
 // Endpoint to get previous quiz results
 app.get("/results", (req, res) => {

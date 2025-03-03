@@ -1,14 +1,17 @@
-[
-    {
-        "range": [23, 30],
-        "text": "Excellent! You have a great knowledge base."
-    },
-    {
-        "range": [15, 22],
-        "text": "Good job! There's still room for improvement."
-    },
-    {
-        "range": [0, 14],
-        "text": "Keep learning! Practice makes perfect."
-    }
-]
+{
+    "thresholds": [
+      {
+        "range": [0.75, 1],
+        "text": "Excellent! You are confident and progressing well in your career development."
+      },
+      {
+        "range": [0.45, 0.7499],
+        "text": "You're on the right track but might need to focus on key growth areas."
+      },
+      {
+        "range": [0, 0.4499],
+        "text": "Consider working on self-improvement and career clarity for better progress."
+      }
+    ]
+  }
+  
