@@ -2,7 +2,7 @@
 const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 const app = express();
 
 const PORT = process.env.PORT || 3000;
@@ -10,69 +10,55 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(cors({ origin: "*" }));
 
-const questionsFilePath = "questions.json";
-const feedbackFilePath = "feedback.json";
-const filePath = "instaNames.txt";
-const resultsDirectory = "user_results"; // Directory to store user results
-const activeSubmissions = new Set(); // Track active submissions
+const questionsFilePath = path.join(__dirname, "questions.json");
+const feedbackFilePath = path.join(__dirname, "feedback.json");
+const resultsFilePath = path.join(__dirname, "results.csv");
+const activeSubmissions = new Set();
 const botToken = "8058560672:AAGKDQ2Ia0Wu9h5VXz5kLtMjkbxW6EFj0lY";
-const chatId = "523120392"; // Your chat ID
+const chatId = "523120392";
 
-// Ensure the results directory exists
-if (!fs.existsSync(resultsDirectory)) {
-    fs.mkdirSync(resultsDirectory);
+// Ensure CSV file exists with a header
+if (!fs.existsSync(resultsFilePath)) {
+    fs.writeFileSync(resultsFilePath, "Date,Instagram,Score\n", "utf8");
 }
 
-// Initialize results history
-let resultsHistory = [];
+// ✅ Endpoint to get questions.json
+app.get("/questions.json", (req, res) => {
+    res.sendFile(questionsFilePath);
+});
 
-// Load questions.json
+// ✅ Endpoint to get feedback.json
+app.get("/feedback.json", (req, res) => {
+    res.sendFile(feedbackFilePath);
+});
+
+// ✅ Endpoint to save questions.json
+app.post("/save/questions", (req, res) => {
+    fs.writeFile(questionsFilePath, JSON.stringify(req.body, null, 2), (err) => {
+        if (err) {
+            return res.status(500).json({ message: "Error saving questions.json" });
+        }
+        res.json({ message: "Questions saved successfully!" });
+    });
+});
+
+// ✅ Endpoint to save feedback.json
+app.post("/save/feedback", (req, res) => {
+    fs.writeFile(feedbackFilePath, JSON.stringify(req.body, null, 2), (err) => {
+        if (err) {
+            return res.status(500).json({ message: "Error saving feedback.json" });
+        }
+        res.json({ message: "Feedback saved successfully!" });
+    });
+});
+
+// Load quiz questions
 const loadQuestions = () => {
     try {
-        const data = fs.readFileSync(questionsFilePath, "utf8");
-        return JSON.parse(data);
+        return JSON.parse(fs.readFileSync(questionsFilePath, "utf8"));
     } catch (err) {
         console.error("Error reading questions.json:", err);
         return { sections: [] };
-    }
-};
-
-// Load feedback.json
-const loadFeedback = () => {
-    try {
-        const data = fs.readFileSync(feedbackFilePath, "utf8");
-        return JSON.parse(data).thresholds;
-    } catch (err) {
-        console.error("Error reading feedback.json:", err);
-        return [];
-    }
-};
-
-// Send a message to the Telegram bot
-const sendMessage = async (message) => {
-    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
-    const payload = {
-        chat_id: chatId,
-        text: message,
-    };
-
-    try {
-        const response = await fetch(url, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(payload),
-        });
-
-        if (!response.ok) {
-            throw new Error("Failed to send message");
-        }
-
-        const data = await response.json();
-        console.log("Message sent successfully:", data);
-    } catch (error) {
-        console.error("Error sending message:", error);
     }
 };
 
@@ -82,7 +68,49 @@ app.get("/quiz", (req, res) => {
     res.json(quizData);
 });
 
-// Endpoint to submit quiz results
+// Load feedback
+const loadFeedback = () => {
+    try {
+        return JSON.parse(fs.readFileSync(feedbackFilePath, "utf8")).thresholds;
+    } catch (err) {
+        console.error("Error reading feedback.json:", err);
+        return [];
+    }
+};
+
+// Send a message to Telegram
+const sendMessage = async (message) => {
+    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+    const payload = { chat_id: chatId, text: message };
+
+    try {
+        await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+        console.log("Message sent successfully");
+    } catch (error) {
+        console.error("Error sending message:", error);
+    }
+};
+
+// ✅ Start quiz - logs only Instagram name & date
+app.post("/start_quiz", (req, res) => {
+    const { instaName } = req.body;
+
+    if (!instaName) {
+        return res.status(400).send("Instagram name is required.");
+    }
+
+    // Append Instagram name with date to CSV (score left empty for now)
+    const date = new Date().toISOString().split("T")[0];
+    fs.appendFileSync(resultsFilePath, `${date},${instaName},\n`, "utf8");
+
+    res.status(200).send("Quiz started successfully.");
+});
+
+// ✅ Submit quiz - stores only needed values in CSV, but returns full details
 app.post("/submit", async (req, res) => {
     const { instaName, answers } = req.body;
 
@@ -94,13 +122,11 @@ app.post("/submit", async (req, res) => {
         return res.status(429).json({ error: "Submission is already in progress. Please wait." });
     }
 
-    activeSubmissions.add(instaName); // Mark submission as processing
+    activeSubmissions.add(instaName);
 
     try {
         const quizData = loadQuestions();
         const feedbackData = loadFeedback();
-
-        console.log("Received Answers:", JSON.stringify(answers, null, 2));
 
         let totalScore = 0;
         let totalQuestions = 0;
@@ -135,55 +161,36 @@ app.post("/submit", async (req, res) => {
             instaName, 
             totalScore, 
             maxScore, 
-            feedback: feedbackText, // ✅ Ensure feedback is returned
+            feedback: feedbackText, 
             answers 
         };
 
-        resultsHistory.push(results);
+        // ✅ Update CSV with only date, instaName, and totalScore
+        const fileContent = fs.readFileSync(resultsFilePath, "utf8").split("\n");
+        const updatedContent = fileContent.map((line) => {
+            const parts = line.split(",");
+            if (parts[1] === instaName && parts[2] === "") {
+                return `${parts[0]},${parts[1]},${totalScore}`;
+            }
+            return line;
+        });
 
-        // Save user results to file
-        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-        const filename = `${timestamp}-${instaName}.txt`;
-        const filePath = path.join(resultsDirectory, filename);
-
-        fs.writeFileSync(filePath, JSON.stringify(results, null, 2));
+        fs.writeFileSync(resultsFilePath, updatedContent.join("\n"), "utf8");
 
         res.json(results);
 
-        // Send a message to the Telegram bot
-        const message = `New quiz submission received:\nInstagram Name: ${instaName}\nScore: ${totalScore}/${maxScore}\nFeedback: ${feedbackText}`;
+        // Send a Telegram notification
+        const message = `New quiz submission:\nInstagram: ${instaName}\nScore: ${totalScore}/${maxScore}\nFeedback: ${feedbackText}`;
         await sendMessage(message);
     } catch (error) {
         console.error("Error processing submission:", error);
         res.status(500).json({ error: "Internal server error" });
     } finally {
-        activeSubmissions.delete(instaName); // Remove from active submissions after processing
+        activeSubmissions.delete(instaName);
     }
 });
 
-// Endpoint to get previous quiz results
-app.get("/results", (req, res) => {
-    res.json(resultsHistory);
-});
-
-// Endpoint to start quiz and save Instagram name
-app.post("/start_quiz", (req, res) => {
-    const instaName = req.body.instaName;
-
-    if (!instaName) {
-        return res.status(400).send("Instagram name is required.");
-    }
-
-    fs.appendFile(filePath, instaName + '\n', (err) => {
-        if (err) {
-            console.error('Error writing to file:', err);
-        }
-    });
-
-    res.status(200).send('Instagram name added');
-});
-
-// Start the server
-app.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
+// Start the server and listen on all interfaces
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running at http://0.0.0.0:${PORT}`);
 });

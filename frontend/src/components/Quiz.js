@@ -13,7 +13,7 @@ const Quiz = () => {
     const fetchQuizData = async () => {
       console.log("Fetching quiz data");
       try {
-        const res = await fetch("http://localhost:3000/quiz");
+        const res = await fetch(`${process.env.REACT_APP_API_URL}/quiz`);
         const data = await res.json();
         console.log("Quiz data fetched", data);
         setQuizData(data.sections || []);
@@ -54,7 +54,7 @@ const Quiz = () => {
     console.log("Payload:", JSON.stringify(payload));
 
     try {
-      const response = await fetch("http://localhost:3000/submit", {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -77,9 +77,6 @@ const Quiz = () => {
     <Container maxWidth="md" style={{ marginTop: "40px" }}>
       <Paper style={{ padding: "30px", backgroundColor: "#f0f4f8" }}>
         <Typography variant="h3" align="center">Quiz App</Typography>
-        <Typography variant="h5" align="center" style={{ marginBottom: "20px" }}>
-          Instagram Name: {instaName}
-        </Typography>
 
         {quizData.map((section) => (
           <div key={section.section_name} style={{ marginBottom: "30px" }}>
