@@ -1,31 +1,32 @@
 ﻿const express = require("express");
 const cors = require("cors");
-const fs = require("fs");
+const fs = require("fs"); // Import the fs module
 const path = require("path");
 const fetch = (...args) =>
   import("node-fetch").then(({ default: fetch }) => fetch(...args));
+const db = require('./database'); // Import the database module
 const app = express();
 
 const PORT = process.env.PORT || 3000;
+const SEC_CODE = "##12&&&2$DI3_________dgUSwdhwh#!#3981&#!@#()!@"; // Add your secure code here
 
 app.use(express.json());
 app.use(cors({ origin: "*" }));
 
 const questionsFilePath = path.join(__dirname, "questions.json");
 const feedbackFilePath = path.join(__dirname, "feedback.json");
-const resultsFilePath = path.join(__dirname, "results.csv");
 const activeSubmissions = new Set();
-const botToken = "8058560672:AAGKDQ2Ia0Wu9h5VXz5kLtMjkbxW6EFj0lY";
-const chatId = "523120392";
+const botToken = process.env.BOT_TOKEN;
+const chatId = process.env.CHAT_ID;
 
-// Ensure CSV file exists with a header
-if (!fs.existsSync(resultsFilePath)) {
-  fs.writeFileSync(
-    resultsFilePath,
-    "Date,Instagram,Score,NonNullAnswers\n",
-    "utf8"
-  );
-}
+// Middleware to check X-Sec-Code header
+const checkSecCode = (req, res, next) => {
+  const secCode = req.headers["x-sec-code"];
+  if (secCode !== SEC_CODE) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+  next();
+};
 
 // ✅ Endpoint to get questions.json
 app.get("/questions.json", (req, res) => {
@@ -38,7 +39,7 @@ app.get("/feedback.json", (req, res) => {
 });
 
 // ✅ Endpoint to save questions.json
-app.post("/save/questions", (req, res) => {
+app.post("/save/questions", checkSecCode, (req, res) => {
   fs.writeFile(
     questionsFilePath,
     JSON.stringify(req.body, null, 2),
@@ -52,7 +53,7 @@ app.post("/save/questions", (req, res) => {
 });
 
 // ✅ Endpoint to save feedback.json
-app.post("/save/feedback", (req, res) => {
+app.post("/save/feedback", checkSecCode, (req, res) => {
   fs.writeFile(
     feedbackFilePath,
     JSON.stringify(req.body, null, 2),
@@ -108,7 +109,7 @@ const sendMessage = async (message) => {
   }
 };
 
-// ✅ Start quiz - logs only Instagram name & date
+// ✅ Start quiz - logs only Instagram name & date with ID
 app.post("/start_quiz", (req, res) => {
   const { instaName } = req.body;
 
@@ -116,11 +117,13 @@ app.post("/start_quiz", (req, res) => {
     return res.status(400).send("Instagram name is required.");
   }
 
-  // Append Instagram name with date to CSV (score left empty for now)
   const date = new Date().toISOString().split("T")[0];
-  fs.appendFileSync(resultsFilePath, `${date},${instaName},\n`, "utf8");
-
-  res.status(200).send("Quiz started successfully.");
+  db.run(`INSERT INTO results (date, instagram) VALUES (?, ?)`, [date, instaName], function(err) {
+    if (err) {
+      return res.status(500).send("Error starting quiz.");
+    }
+    res.status(200).send("Quiz started successfully.");
+  });
 });
 
 // ✅ Submit quiz - maps answers to questions dynamically using questions.json
@@ -181,30 +184,36 @@ app.post("/submit", async (req, res) => {
       }
     }
 
-    // Convert mapped results to JSON-like string for CSV
     const mappedAnswersString = JSON.stringify(mappedResults);
 
-    // Update CSV file
-    const fileContent = fs.readFileSync(resultsFilePath, "utf8").split("\n");
-    const updatedContent = fileContent.map((line) => {
-      const parts = line.split(",");
-      if (parts[1] === instaName && parts[2] === "") {
-        return `${parts[0]},${parts[1]},${totalScore},${mappedAnswersString}`;
+    db.run(`UPDATE results SET score = ?, nonNullAnswers = ? WHERE instagram = ? AND score IS NULL`, [totalScore, mappedAnswersString, instaName], function(err) {
+      if (err) {
+        return res.status(500).send("Error submitting quiz.");
       }
-      return line;
+      if (this.changes === 0) {
+        const date = new Date().toISOString().split("T")[0];
+        db.run(`INSERT INTO results (date, instagram, score, nonNullAnswers) VALUES (?, ?, ?, ?)`, [date, instaName, totalScore, mappedAnswersString], function(err) {
+          if (err) {
+            return res.status(500).send("Error submitting quiz.");
+          }
+          res.json({
+            instaName,
+            totalScore,
+            maxScore,
+            feedback: feedbackText,
+            mappedAnswers: mappedResults,
+          });
+        });
+      } else {
+        res.json({
+          instaName,
+          totalScore,
+          maxScore,
+          feedback: feedbackText,
+          mappedAnswers: mappedResults,
+        });
+      }
     });
-
-    fs.writeFileSync(resultsFilePath, updatedContent.join("\n"), "utf8");
-
-    const results = {
-      instaName,
-      totalScore,
-      maxScore,
-      feedback: feedbackText,
-      mappedAnswers: mappedResults,
-    };
-
-    res.json(results);
 
     // Send a Telegram notification
     const message = `New quiz submission:\nInstagram: ${instaName}\nScore: ${totalScore}/${maxScore}\nFeedback: ${feedbackText}`;
@@ -215,6 +224,16 @@ app.post("/submit", async (req, res) => {
   } finally {
     activeSubmissions.delete(instaName);
   }
+});
+
+// ✅ Endpoint to get results content
+app.get("/results", checkSecCode, (req, res) => {
+  db.all(`SELECT * FROM results`, [], (err, rows) => {
+    if (err) {
+      return res.status(500).send("Error fetching results.");
+    }
+    res.json(rows);
+  });
 });
 
 // Start the server and listen on all interfaces
